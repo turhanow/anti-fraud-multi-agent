@@ -325,6 +325,7 @@ Velocity  Profile     Geo       Device      │ │
 - Feedback Learning Agent
 - Adaptive Weighting
 - Real-time streaming (Kafka)
+- Будущая архитектура: `docs/architecture-future.md`
 
 ## 16. Транспорт и версия схемы сообщений (проектное решение)
 
@@ -400,7 +401,7 @@ Velocity  Profile     Geo       Device      │ │
 
 **Примечание**: при росте системы можно добавить Schema Registry, не ломая контракт, так как версия уже зафиксирована в сообщении.
 
-## 16. Итог
+## 17. Итог
 
 Данная архитектура:
 - отражает реальные fraud-платформы крупных финтех-компаний
