@@ -1,0 +1,17 @@
+[project]
+name = "anti-fraud-multi-agent"
+version = "0.1.0"
+description = "Multi-agent fraud detection system"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: модульные тесты изолированных компонентов",
+    "integration: интеграционные тесты агентов/оркестрации",
+]
