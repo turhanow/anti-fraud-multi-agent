@@ -7,6 +7,7 @@ on:
 
 jobs:
   tests:
+    name: tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -35,3 +36,10 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q --maxfail=1
+
+  required:
+    name: required
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - run: echo "All matrix checks passed"
