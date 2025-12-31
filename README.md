@@ -40,22 +40,52 @@
 
 ```text
 ┌──────────────────────────┐
-│      Orchestrator        │
-│  (Control & Dispatch)    │
+│   Event Producers        │
+│ (payments/core systems)  │
 └───────────┬──────────────┘
-            │
- ┌──────────┼──────────┬──────────┐
- │          │          │          │
-Velocity  Profile     Geo       Device
- Agent     Agent      Agent      Agent
- │          │          │          │
- └──────────┼──────────┼──────────┘
-            │
-     Merchant Agent
-            │
-        ML Agent
-            │
-     Decision Agent
+            │ publish
+            v
+┌──────────────────────────────────────────────┐
+│                 Kafka Cluster                │
+│                                              │
+│  [transactions]  --------------------------┐ │
+│  [agent.velocity.requests]                 │ │
+│  [agent.profile.requests]                  │ │
+│  [agent.geo.requests]                      │ │
+│  [agent.device.requests]                   │ │
+│  [agent.merchant.requests]                 │ │
+│  [agent.ml.requests]                       │ │
+│                                              │
+│  [agent.velocity.results]                  │ │
+│  [agent.profile.results]                   │ │
+│  [agent.geo.results]                       │ │
+│  [agent.device.results]                    │ │
+│  [agent.merchant.results]                  │ │
+│  [agent.ml.results]                        │ │
+│                                              │
+│  [decision.results] <--------------------┐ │ │
+└──────────────────────────────────────────┼─┼─┘
+                                           │ │
+┌──────────────────────────┐               │ │
+│      Orchestrator        │               │ │
+│  (Dispatch requests)     │               │ │
+└───────────┬──────────────┘               │ │
+            │ consume transactions         │ │
+            │ publish agent requests       │ │
+            v                               │ │
+ ┌──────────┼──────────┬──────────┐         │ │
+ │          │          │          │         │ │
+Velocity  Profile     Geo       Device      │ │
+ Agent     Agent      Agent      Agent       │ │
+            │                               │ │
+        Merchant Agent                      │ │
+            │                               │ │
+          ML Agent                          │ │
+            │ publish results               │ │
+            v                               │ │
+     Decision Agent ------------------------┘ │
+           consume agent.results              │
+           publish decision.results           │
 ```
 
 ## 4. Domain Model (основа всей системы)
@@ -125,6 +155,14 @@ Velocity  Profile     Geo       Device
     - изолирует агентов друг от друга
     - позволяет легко добавлять / убирать агентов
     - упрощает масштабирование
+- **Паттерны проектирования**:
+    - маршрутизация агентов
+    - оркестрация и агрегирование сигналов
+    - параллельное выполнение независимых анализов
+- **Участвует в процессах**:
+    - распределение транзакции по агентам
+    - синхронизация результатов
+    - подготовка сводного контекста для принятия решения
 
 ## 7. VelocityAgent
 
@@ -140,6 +178,12 @@ Velocity  Profile     Geo       Device
     - резкий рост суммы
     - аномально короткий интервал между операциями
 - **Тип сигнала**: Поведенческая аномалия.
+- **Паттерны проектирования**:
+    - специализированный агент (single-responsibility)
+    - rule-based анализ как инструмент
+- **Участвует в процессах**:
+    - выявление аномалий скорости
+    - подача поведенческого сигнала для решения
 
 ## 8. ProfileAgent
 
@@ -154,6 +198,12 @@ Velocity  Profile     Geo       Device
     - сумма вне привычного диапазона
     - новая категория расходов
     - несоответствие устройства профилю
+- **Паттерны проектирования**:
+    - специализированный агент
+    - сравнение с профилем (state-aware анализ)
+- **Участвует в процессах**:
+    - проверка отклонений от профиля
+    - формирование персонализированного риска
 
 ## 9. GeoRiskAgent
 
@@ -168,6 +218,12 @@ Velocity  Profile     Geo       Device
     - невозможное перемещение (travel velocity)
     - высокая риск-оценка страны
     - несоответствие валюты региону
+- **Паттерны проектирования**:
+    - специализированный агент
+    - контекстная валидация (geo-consistency checks)
+- **Участвует в процессах**:
+    - оценка георисков
+    - выявление несостыковок локации
 
 ## 10. DeviceAgent
 
@@ -181,19 +237,25 @@ Velocity  Profile     Geo       Device
     - новый fingerprint
     - `card_not_present` + высокая сумма
     - несовпадение `device_type` с профилем
+- **Паттерны проектирования**:
+    - специализированный агент
+    - сигналы доверия устройства (device trust heuristics)
+- **Участвует в процессах**:
+    - контроль устройств и fingerprints
+    - усиление решения при новых/аномальных устройствах
 
 ## 11. MerchantAgent
 
 - **Назначение**: Оценка риска, связанного с продавцом.
 - **Основной вопрос**: Насколько рискован сам мерчант, независимо от клиента?
-- **Используемые фичи**:
-    - `merchant`
-    - `merchant_category`
-    - `merchant_risk_score`
-- **Примеры сигналов**:
-    - мерчант с высокой историей fraud
-    - нетипичный мерчант для клиента
-    - подозрительные категории (gambling, crypto, etc.)
+- **Ключевые сигналы**: риск‑скор мерчанта, риск‑категории, online + высокая сумма, подозрительные имена.
+- **Подробная документация**: `docs/merchant-agent.md` (включая будущие фичи)
+- **Паттерны проектирования**:
+    - rule-based агент
+    - модульные правила с DI
+- **Участвует в процессах**:
+    - независимая оценка мерчанта
+    - добавление объяснимого риск-сигнала
 
 ## 12. MLModelAgent
 
@@ -210,6 +272,12 @@ Velocity  Profile     Geo       Device
     - даёт вероятностный сигнал
     - усиливает rule-based агентов
     - не заменяет reasoning
+- **Паттерны проектирования**:
+    - ML как советник (advisor)
+    - сигнал вероятности для агрегации
+- **Участвует в процессах**:
+    - скоринг на основе модели
+    - поддержка решения без монополии на итог
 
 ## 13. DecisionAgent
 
@@ -233,6 +301,14 @@ Velocity  Profile     Geo       Device
   ]
 }
 ```
+- **Паттерны проектирования**:
+    - агрегатор сигналов
+    - rule-based policy engine
+    - explainable decisioning
+- **Участвует в процессах**:
+    - объединение сигналов от агентов
+    - применение порогов/весов
+    - генерация объяснимого решения
 
 ## 14. Ключевые архитектурные свойства
 
@@ -249,8 +325,83 @@ Velocity  Profile     Geo       Device
 - Feedback Learning Agent
 - Adaptive Weighting
 - Real-time streaming (Kafka)
+- Будущая архитектура: `docs/architecture-future.md`
 
-## 16. Итог
+## 16. Транспорт и версия схемы сообщений (проектное решение)
+
+**Выбранный подход на будущее**: один Kafka-топик + поле `schema_version` в сообщении.
+
+Почему так:
+- проще эксплуатация (меньше топиков/консьюмеров)
+- плавная миграция версий внутри одного потока
+- единая история для реплеев и аналитики
+
+### Базовая схема
+- Входящий топик: `transactions`
+- В каждом сообщении есть `schema_version` (например, `"1.0"`, `"2.0"`).
+- Оркестратор читает версию и **приводит событие к единому внутреннему формату** `Transaction`.
+
+### Как оркестратор работает с версиями
+1) Определяет `schema_version`.
+2) Выбирает соответствующий парсер/адаптер (например `parse_v1`, `parse_v2`).
+3) Преобразует вход в единый объект `Transaction`.
+4) Если версия неизвестна — сообщение уходит в `dead-letter` топик.
+
+### Эволюция схемы (без Schema Registry)
+- Используем JSON (читаемо для MVP).
+- Добавляем новые поля, не ломая старые.
+- Старые поля не переименовываем и не меняем типы.
+- Документируем изменения в `docs/` и поддерживаем валидацию в продюсере/консьюмере.
+
+### Пример JSON-сообщения (v1.0)
+```json
+{
+  "schema_version": "1.0",
+  "analysis_id": "3f1a7a1d-3fd2-4c71-9a7f-1b7f7a6a2c31",
+  "transaction_id": "txn_000123",
+  "timestamp": "2024-08-23T10:15:30Z",
+  "amount": 149.90,
+  "currency": "USD",
+  "customer_id": "cust_987",
+  "merchant": {
+    "name": "Example Store",
+    "category": "electronics",
+    "type": "online",
+    "risk_score": 0.72
+  },
+  "payment": {
+    "card_present": false,
+    "card_type": "credit"
+  },
+  "geo": {
+    "country": "US",
+    "city": "New York"
+  },
+  "device": {
+    "type": "mobile",
+    "fingerprint": "fp_abc123"
+  }
+}
+```
+
+### Привязка к `Transaction`
+Внутренний объект `Transaction` в коде плоский, поэтому оркестратор/адаптер
+преобразует вложенную структуру в поля модели:
+- `transaction_id`, `customer_id`, `timestamp`
+- `amount`, `currency`, `payment.card_type` -> `card_type`
+- `payment.card_present` -> `card_present`
+- `merchant.name` -> `merchant`
+- `merchant.category` -> `merchant_category`
+- `merchant.type` -> `merchant_type`
+- `merchant.risk_score` -> `merchant_risk_score`
+- `geo.country` -> `country`, `geo.city` -> `city`
+- `device.type` -> `device_type`, `device.fingerprint` -> `device_fingerprint`
+- `channel` (если есть в сообщении) -> `channel`
+- `account_age`, `typical_spending_range`, `preferred_devices`, `fraud_protection_enabled`
+
+**Примечание**: при росте системы можно добавить Schema Registry, не ломая контракт, так как версия уже зафиксирована в сообщении.
+
+## 17. Итог
 
 Данная архитектура:
 - отражает реальные fraud-платформы крупных финтех-компаний
